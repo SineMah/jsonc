@@ -15,7 +15,7 @@ func TestRecognizeJsonc(t *testing.T) {
 		assert.Equal(t, false, IsJsonc(bytes))
 	})
 
-	t.Run("json is no json with slashin string", func(t *testing.T) {
+	t.Run("json is no json with slash in string", func(t *testing.T) {
 		bytes := []byte(`{"app//port": 1111, "port_as_string":"1110", "foo": {"bar": "baz"}, "is_true": true}`)
 
 		assert.Equal(t, false, IsJsonc(bytes))
@@ -50,7 +50,7 @@ func TestRemoveCommentsFromJsonc(t *testing.T) {
 		bytesNoComment := []byte(`{"port": 1111, "port_as_string":"1110", "foo": {"bar": "baz"}, "is_true": true}`)
 		bytes := []byte(`{"port": 1111, "port_as_string":"1110", "foo": {"bar": "baz"}, "is_true": true}`)
 
-		v, _ := RemoveComments(bytes)
+		v := RemoveComments(bytes)
 
 		assert.Equal(t, bytesNoComment, v)
 	})
@@ -59,7 +59,7 @@ func TestRemoveCommentsFromJsonc(t *testing.T) {
 		bytesWithComment := []byte(`{"port": 1111, /* 42 */"port_as_string":"1110", "foo": {"bar": "baz"}, "is_true": true}`)
 		bytes := []byte(`{"port": 1111, "port_as_string":"1110", "foo": {"bar": "baz"}, "is_true": true}`)
 
-		v, _ := RemoveComments(bytesWithComment)
+		v := RemoveComments(bytesWithComment)
 
 		assert.Equal(t, bytes, v)
 	})
@@ -76,9 +76,53 @@ func TestRemoveCommentsFromJsonc(t *testing.T) {
 		}`)
 		controlBytes := []byte(`{"port":"1111","port_as_string":"1110","foo":{"bar":"baz"},"is_true":true}`)
 
-		v, _ := RemoveComments(bytesWithComment)
+		v := RemoveComments(bytesWithComment)
 		raw := json.RawMessage(v)
 		bytesNoComment, _ := json.Marshal(&raw)
+
+		assert.Equal(t, controlBytes, bytesNoComment)
+	})
+
+	t.Run("test json with comments", func(t *testing.T) {
+		bytesWithComment := []byte(`{
+			"port": "1111",
+			// foo bar
+			"port_as_string":"1110",
+			"foo": {
+				"bar": "baz"
+			},
+			/* is 42? */
+			"is_true": true
+		}`)
+		controlBytes := []byte(`{"port":"1111","port_as_string":"1110","foo":{"bar":"baz"},"is_true":true}`)
+
+		v := RemoveComments(bytesWithComment)
+		raw := json.RawMessage(v)
+		bytesNoComment, _ := json.Marshal(&raw)
+
+		assert.Equal(t, controlBytes, bytesNoComment)
+	})
+}
+
+func TestUnmarshalJsonc(t *testing.T) {
+
+	t.Run("unmarshal jsonc with comments", func(t *testing.T) {
+		m := make(map[string]any)
+
+		bytesWithComment := []byte(`{
+			"port": "1111",
+			// foo bar
+			"port_as_string":"1110",
+			"foo": {
+				"bar": "baz"
+			},
+			/* is 42? */
+			"is_true": true
+		}`)
+		controlBytes := []byte(`{"foo":{"bar":"baz"},"is_true":true,"port":"1111","port_as_string":"1110"}`)
+
+		_ = Unmarshal(bytesWithComment, &m)
+		bytesNoComment, _ := json.Marshal(&m)
 
 		assert.Equal(t, controlBytes, bytesNoComment)
 	})

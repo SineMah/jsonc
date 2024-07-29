@@ -1,83 +1,58 @@
 package jsonc
 
 import (
+	"bytes"
 	"encoding/json"
-	"log"
 )
 
-func RemoveComments(data []byte) ([]byte, error) {
-	stringVal := 0
-	commentsMap := make(map[int][]int)
+func RemoveComments(data []byte) []byte {
+	var buffer bytes.Buffer
+	inString := false
+	inSingleLineComment := false
+	inMultiLineComment := false
 
-	for i, c := range data {
-
-		if c == '"' {
-			stringVal++
-		}
-
-		if stringVal%2 == 1 {
-			continue
-		}
-
-		if i >= len(data)-1 {
-			continue
-		}
-
-		cNext := data[i+1]
-
-		if c == '/' && cNext == '/' {
-			log.Print("found comment1")
-			commentsMap[len(commentsMap)] = []int{i, findNextBytes(data, []byte{'\n'}, i)}
-		}
-
-		if c == '/' && cNext == '*' {
-			log.Print("found comment2")
-			commentsMap[len(commentsMap)] = []int{i, findNextBytes(data, []byte{'*', '/'}, i)}
+	for i := 0; i < len(data); i++ {
+		switch {
+		case inSingleLineComment:
+			if data[i] == '\n' {
+				inSingleLineComment = false
+				buffer.WriteByte(data[i])
+			}
+		case inMultiLineComment:
+			if iteratorInRange(data, i) && data[i] == '*' && data[i+1] == '/' {
+				inMultiLineComment = false
+				i++
+			}
+		case data[i] == '"':
+			inString = !inString
+			buffer.WriteByte(data[i])
+		case !inString && data[i] == '/' && iteratorInRange(data, i):
+			switch data[i+1] {
+			case '/':
+				inSingleLineComment = true
+				i++
+			case '*':
+				inMultiLineComment = true
+				i++
+			default:
+				buffer.WriteByte(data[i])
+			}
+		default:
+			buffer.WriteByte(data[i])
 		}
 	}
 
-	for i := len(commentsMap) - 1; i >= 0; i-- {
-		start := commentsMap[i][0]
-		end := commentsMap[i][1]
-		data = append(data[:start], data[end:]...)
-	}
-
-	return data, nil
+	return buffer.Bytes()
 }
 
-func findNextBytes(haystack []byte, search []byte, start int) int {
-	for i, c := range haystack {
-		if i < start {
-			continue
-		}
+func iteratorInRange(data []byte, i int) bool {
 
-		if c == search[0] {
-			found := true
-
-			for j, s := range search {
-				if haystack[i+j] != s {
-					found = false
-					break
-				}
-			}
-
-			if found {
-				return i + len(search)
-			}
-		}
-	}
-
-	return -1
+	return i+1 < len(data)
 }
 
 func Unmarshal(data []byte, v any) error {
 	if IsJsonc(data) {
-		var err error
-		data, err = RemoveComments(data)
-
-		if err != nil {
-			return err
-		}
+		data = RemoveComments(data)
 	}
 
 	return json.Unmarshal(data, v)
